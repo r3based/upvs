@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: upvs
+      POSTGRES_PASSWORD: upvs
+      POSTGRES_DB: upvs
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DATA_RAW_DIR: ${DATA_RAW_DIR}
+      DATA_DERIVED_DIR: ${DATA_DERIVED_DIR}
+      FAISS_INDEX_PATH: ${FAISS_INDEX_PATH}
+      FAISS_MAP_PATH: ${FAISS_MAP_PATH}
+      EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER}
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL}
+      VLLM_URL: ${VLLM_URL}
+      VLLM_MODEL: ${VLLM_MODEL}
+    volumes:
+      - ../data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+      NEXT_PUBLIC_MODE: ${NEXT_PUBLIC_MODE}
+    volumes:
+      - ../data:/app/data:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  # Включите при наличии образа vLLM и GPU
+  vllm:
+    image: vllm/vllm-openai:latest
+    command: ["--model", "${VLLM_MODEL}"]
+    environment:
+      - VLLM_API_KEY=EMPTY
+    ports:
+      - "8001:8000"
+    profiles:
+      - vllm
+
+volumes:
+  postgres_data:
