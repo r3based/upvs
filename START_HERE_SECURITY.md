@@ -63,20 +63,33 @@ sudo bash scripts/security/setup_all.sh
 
 **Время:** ~5-10 минут
 
-### Шаг 3: Сгенерируйте секреты
+### Шаг 3: Сгенерируйте секреты (ОБЯЗАТЕЛЬНО!)
+
+**⚠️ КРИТИЧНО:** Без `.env` файла проект НЕ запустится!
 
 ```bash
-bash scripts/generate_secrets.sh
+bash scripts/generate_secrets.sh > .env
 ```
 
-Скопируйте вывод и создайте `.env` файл:
-
+Или вручную:
 ```bash
-nano .env
-# Вставьте сгенерированные значения
+cat > .env << 'EOF'
+API_KEY=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+ALLOWED_ORIGINS=https://chat.openai.com,https://your-domain.com
+EOF
 ```
 
 **⚠️ ВАЖНО:** Сохраните секреты в безопасном месте!
+
+**Проверка:**
+```bash
+# Должен вывести переменные
+cat .env
+
+# Docker Compose должен их видеть
+docker compose config | grep API_KEY
+```
 
 ### Шаг 4: Настройте Nginx
 

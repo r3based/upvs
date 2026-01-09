@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
     environment:
       POSTGRES_USER: upvs
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-upvs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # БЕЗ дефолта - compose упадёт если нет .env
       POSTGRES_DB: upvs
     # Порты НЕ публикуются - доступ только внутри Docker network
     expose:
@@ -25,8 +23,8 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgresql://upvs:${POSTGRES_PASSWORD:-upvs}@postgres:5432/upvs
-      API_KEY: ${API_KEY:-your-secret-api-key-here}
+      DATABASE_URL: postgresql://upvs:${POSTGRES_PASSWORD}@postgres:5432/upvs
+      API_KEY: ${API_KEY}  # БЕЗ дефолта - ОБЯЗАТЕЛЕН .env файл
     volumes:
       - ./data:/app/data
       - ./scripts:/app/scripts
@@ -43,9 +41,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgresql://upvs:${POSTGRES_PASSWORD:-upvs}@postgres:5432/upvs
-      API_KEY: ${API_KEY:-your-secret-api-key-here}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://chat.openai.com}
+      DATABASE_URL: postgresql://upvs:${POSTGRES_PASSWORD}@postgres:5432/upvs
+      API_KEY: ${API_KEY}  # БЕЗ дефолта - ОБЯЗАТЕЛЕН .env файл
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://chat.openai.com}  # Дефолт ок для разработки
     volumes:
       - ./data:/app/data
     # Порт публикуется ТОЛЬКО на localhost - доступ через Nginx
@@ -57,6 +55,8 @@ services:
       init:
         condition: service_completed_successfully
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -71,5 +71,8 @@ volumes:
 networks:
   upvs_internal:
     driver: bridge
-    internal: false  # false для доступа к интернету (нужен для init)
+    # internal: true означает NO egress (нет выхода наружу)
+    # Контейнеры могут общаться между собой, но НЕ могут в интернет
+    # Для pip install используется build-time, не runtime
+    internal: true
 

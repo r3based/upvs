@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Security, status
+from fastapi import FastAPI, HTTPException, Security, status, Query, Path
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from typing import Any
 
 from .config import get_settings
 from .db import Database
@@ -15,6 +16,50 @@ from .db import Database
 settings = get_settings()
 logger = logging.getLogger("upvs.api")
 logging.basicConfig(level=logging.INFO)
+
+
+# ========== МОДЕЛИ ОТВЕТОВ ==========
+
+class HealthResponse(BaseModel):
+    status: str
+
+class TreeResponse(BaseModel):
+    tree: List[Dict[str, Any]]
+    total_pages: int
+
+class SearchTreeResponse(BaseModel):
+    results: List[Dict[str, Any]]
+    count: int
+
+class PageFullResponse(BaseModel):
+    page: Dict[str, Any]
+    content: List[Dict[str, Any]]
+    statistics: Dict[str, int]
+
+class TablesListResponse(BaseModel):
+    tables: List[Dict[str, Any]]
+    count: int
+    total: int
+    limit: int
+    offset: int
+
+class TablesSearchResponse(BaseModel):
+    tables: List[Dict[str, Any]]
+    count: int
+
+class TableResponse(BaseModel):
+    table_id: str
+    caption: Optional[str]
+    columns: List[str]
+    rows: List[List[str]]
+    section_path: Optional[str]
+    page: Optional[Dict[str, Any]]
+
+class PageTablesResponse(BaseModel):
+    page: Dict[str, Any]
+    tables: List[Dict[str, Any]]
+    count: int
+
 
 # Bearer token аутентификация
 security = HTTPBearer()
@@ -48,8 +93,7 @@ app = FastAPI(
 """,
     version="2.0.0",
     servers=[
-        {"url": "http://localhost:8000", "description": "Локальный сервер"},
-        {"url": "https://your-domain.com", "description": "Продакшн сервер"}
+        {"url": "https://upvs.duckdns.org", "description": "Production server"}
     ],
     contact={
         "name": "UPVS API Support"
@@ -94,10 +138,10 @@ def on_startup() -> None:
     logger.info(f"Разрешённые CORS origins: {allowed_origins}")
 
 
-@app.get("/health", tags=["System"])
-def health() -> Dict[str, str]:
+@app.get("/health", tags=["System"], response_model=HealthResponse)
+def health() -> HealthResponse:
     """Проверка состояния API (не требует аутентификации)"""
-    return {"status": "ok"}
+    return HealthResponse(status="ok")
 
 
 # OpenAPI эндпоинт удалён для безопасности
@@ -106,10 +150,10 @@ def health() -> Dict[str, str]:
 
 # ========== ЭНДПОИНТЫ ДЛЯ CHATGPT ==========
 
-@app.get("/api/tree", tags=["Navigation"], summary="Получить дерево всех страниц")
+@app.get("/api/tree", tags=["Navigation"], summary="Получить дерево всех страниц", response_model=TreeResponse)
 def get_full_tree(
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> TreeResponse:
     """
     Возвращает полное дерево страниц справочника UPVS.
     
@@ -165,15 +209,15 @@ def get_full_tree(
     for root in root_pages:
         sort_children(root)
     
-    return {"tree": root_pages, "total_pages": len(all_pages)}
+    return TreeResponse(tree=root_pages, total_pages=len(all_pages))
 
 
-@app.get("/api/tree/search", tags=["Navigation"], summary="Найти страницы по названию")
+@app.get("/api/tree/search", tags=["Navigation"], summary="Найти страницы по названию", response_model=SearchTreeResponse)
 def search_tree(
-    query: str = Field(..., description="Поисковый запрос по названию страницы"),
-    limit: int = Field(20, ge=1, le=100, description="Максимальное количество результатов"),
+    query: str = Query(..., description="Поисковый запрос по названию страницы"),
+    limit: int = Query(20, ge=1, le=100, description="Максимальное количество результатов"),
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> SearchTreeResponse:
     """
     Поиск страниц по названию (регистронезависимый).
     
@@ -222,14 +266,14 @@ def search_tree(
             "children": children,
         })
     
-    return {"results": results, "count": len(results)}
+    return SearchTreeResponse(results=results, count=len(results))
 
 
-@app.get("/api/page/{page_id}", tags=["Content"], summary="Получить всю информацию о странице")
+@app.get("/api/page/{page_id}", tags=["Content"], summary="Получить всю информацию о странице", response_model=PageFullResponse)
 def get_page_full(
-    page_id: str = Field(..., description="ID страницы из дерева"),
+    page_id: str = Path(..., description="ID страницы из дерева"),
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> PageFullResponse:
     """
     Возвращает ВСЮ информацию о странице:
     - Метаданные страницы (title, url, breadcrumbs, toc)
@@ -260,18 +304,18 @@ def get_page_full(
         ORDER BY source_order
         """,
         (page_id,),
-    )
+        )
     
     # Получаем все таблицы
     tables = db.fetch_all(
-        """
+            """
         SELECT table_id, source_order, section_path, caption, columns, rows
         FROM tables
         WHERE page_id = %s
         ORDER BY source_order
-        """,
+            """,
         (page_id,),
-    )
+        )
     
     # Объединяем все в единый упорядоченный список контента
     content = []
@@ -297,8 +341,8 @@ def get_page_full(
     # Сортируем по порядку
     content.sort(key=lambda x: x["order"])
     
-    return {
-        "page": {
+    return PageFullResponse(
+        page={
             "page_id": page["page_id"],
             "url": page["url"],
             "title": page["title"],
@@ -306,32 +350,23 @@ def get_page_full(
             "breadcrumbs": page["breadcrumbs"],
             "toc": page["toc"],
         },
-        "content": content,
-        "statistics": {
+        content=content,
+        statistics={
             "text_blocks": len(text_blocks),
             "tables": len(tables),
             "total_items": len(content),
         }
-    }
+    )
 
 
-@app.get("/api/tables/list", tags=["Tables"], summary="Список всех таблиц с названиями")
+@app.get("/api/tables/list", tags=["Tables"], summary="Список всех таблиц с названиями", response_model=TablesListResponse)
 def list_all_tables(
-    limit: int = Field(100, ge=1, le=500, description="Максимальное количество таблиц"),
-    offset: int = Field(0, ge=0, description="Смещение для пагинации"),
+    limit: int = Query(100, ge=1, le=500, description="Максимальное количество таблиц"),
+    offset: int = Query(0, ge=0, description="Смещение для пагинации"),
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> TablesListResponse:
     """
-    Возвращает список всех таблиц в справочнике с их названиями и страницами.
-    
-    Для каждой таблицы возвращается:
-    - table_id: уникальный ID таблицы
-    - caption: название/заголовок таблицы
-    - page_title: название страницы, на которой находится таблица
-    - page_id: ID страницы
-    
-    Используйте этот эндпоинт, чтобы найти нужную таблицу по названию,
-    затем используйте /api/table/{table_id} для получения данных.
+    Возвращает список всех таблиц в справочнике. Для каждой таблицы: table_id, caption, page_title, page_id. Используйте /api/table/{table_id} для получения полных данных таблицы.
     """
     verify_token(credentials)
     
@@ -353,21 +388,21 @@ def list_all_tables(
         (),
     )
     
-    return {
-        "tables": tables,
-        "count": len(tables),
-        "total": total["count"] if total else 0,
-        "limit": limit,
-        "offset": offset,
-    }
+    return TablesListResponse(
+        tables=tables,
+        count=len(tables),
+        total=total["count"] if total else 0,
+        limit=limit,
+        offset=offset,
+    )
 
 
-@app.get("/api/tables/search", tags=["Tables"], summary="Поиск таблиц по названию")
+@app.get("/api/tables/search", tags=["Tables"], summary="Поиск таблиц по названию", response_model=TablesSearchResponse)
 def search_tables(
-    query: str = Field(..., description="Поисковый запрос по названию таблицы"),
-    limit: int = Field(20, ge=1, le=100, description="Максимальное количество результатов"),
+    query: str = Query(..., description="Поисковый запрос по названию таблицы"),
+    limit: int = Query(20, ge=1, le=100, description="Максимальное количество результатов"),
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> TablesSearchResponse:
     """
     Поиск таблиц по названию (регистронезависимый).
     
@@ -388,37 +423,30 @@ def search_tables(
         (f"%{query}%", limit),
     )
     
-    return {
-        "tables": tables,
-        "count": len(tables),
-    }
+    return TablesSearchResponse(
+        tables=tables,
+        count=len(tables),
+    )
 
 
-@app.get("/api/table/{table_id}", tags=["Tables"], summary="Получить данные таблицы")
+@app.get("/api/table/{table_id}", tags=["Tables"], summary="Получить данные таблицы", response_model=TableResponse)
 def get_table(
-    table_id: str = Field(..., description="ID таблицы из списка таблиц"),
+    table_id: str = Path(..., description="ID таблицы из списка таблиц"),
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> TableResponse:
     """
-    Возвращает полные данные конкретной таблицы:
-    - caption: название таблицы
-    - columns: список названий колонок
-    - rows: массив строк с данными
-    - section_path: путь к разделу на странице
-    - page_info: информация о странице, на которой находится таблица
-    
-    Используйте этот эндпоинт после того, как нашли нужную таблицу через поиск.
+    Возвращает полные данные таблицы: caption, columns, rows, section_path, page_info. Используйте после поиска таблицы через /api/tables/search или /api/tables/list.
     """
     verify_token(credentials)
     
     table = db.fetch_one(
-        """
+            """
         SELECT table_id, page_id, caption, columns, rows, section_path, source_order
-        FROM tables
+            FROM tables
         WHERE table_id = %s
-        """,
+            """,
         (table_id,),
-    )
+        )
     
     if not table:
         raise HTTPException(status_code=404, detail="Таблица не найдена")
@@ -429,21 +457,21 @@ def get_table(
         (table["page_id"],),
     )
     
-    return {
-        "table_id": table["table_id"],
-        "caption": table["caption"],
-        "columns": table["columns"],
-        "rows": table["rows"],
-        "section_path": table["section_path"],
-        "page": page if page else None,
-    }
+    return TableResponse(
+        table_id=table["table_id"],
+        caption=table["caption"],
+        columns=table["columns"],
+        rows=table["rows"],
+        section_path=table["section_path"],
+        page=page if page else None,
+    )
 
 
-@app.get("/api/page/{page_id}/tables", tags=["Tables"], summary="Получить все таблицы страницы")
+@app.get("/api/page/{page_id}/tables", tags=["Tables"], summary="Получить все таблицы страницы", response_model=PageTablesResponse)
 def get_page_tables(
-    page_id: str = Field(..., description="ID страницы"),
+    page_id: str = Path(..., description="ID страницы"),
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Dict[str, object]:
+) -> PageTablesResponse:
     """
     Возвращает все таблицы, которые находятся на конкретной странице.
     
@@ -469,8 +497,8 @@ def get_page_tables(
         (page_id,),
     )
     
-    return {
-        "page": page,
-        "tables": tables,
-        "count": len(tables),
-    }
+    return PageTablesResponse(
+        page=page,
+        tables=tables,
+        count=len(tables),
+    )

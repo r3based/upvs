@@ -1,0 +1,703 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UPVS API",
+    "description": "\n# API для доступа к справочнику UPVS\n\nЭтот API предоставляет доступ к справочнику **UPVS** (Укрупненные Показатели Восстановительной Стоимости).\n\n## 🔐 Аутентификация\n\nВсе эндпоинты (кроме `/health`) требуют Bearer token аутентификации.\n\nДобавьте заголовок: `Authorization: Bearer YOUR_API_KEY`\n\n## 📖 Как использовать\n\n1. **Получите структуру** справочника через `/api/tree`\n2. **Найдите нужный раздел** по названию через `/api/tree/search`\n3. **Получите содержимое страницы** через `/api/page/{page_id}`\n4. **Найдите таблицу** по названию через `/api/tables/search`\n5. **Получите данные таблицы** через `/api/table/{table_id}`\n\n## 🎯 Рекомендуемый workflow для ChatGPT\n\n1. Сначала получите дерево или найдите нужный раздел\n2. Затем запросите конкретную страницу или таблицу\n3. Используйте полученные данные для ответа пользователю\n",
+    "contact": {
+      "name": "UPVS API Support"
+    },
+    "version": "2.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://upvs.duckdns.org",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health",
+        "description": "Проверка состояния API (не требует аутентификации)",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tree": {
+      "get": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Получить дерево всех страниц",
+        "description": "Возвращает полное дерево страниц справочника UPVS.\n\nСтруктура дерева:\n- Корневые страницы (без родителя)\n- Каждая страница содержит список дочерних страниц\n- Для каждой страницы: page_id, url, title, children[]\n\nИспользуйте этот эндпоинт, чтобы понять структуру справочника и найти нужные разделы.",
+        "operationId": "get_full_tree_api_tree_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/tree/search": {
+      "get": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Найти страницы по названию",
+        "description": "Поиск страниц по названию (регистронезависимый).\n\nВозвращает список страниц с информацией о родителе и детях для каждой найденной страницы.",
+        "operationId": "search_tree_api_tree_search_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Поисковый запрос по названию страницы",
+              "title": "Query"
+            },
+            "description": "Поисковый запрос по названию страницы"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Максимальное количество результатов",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Максимальное количество результатов"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchTreeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/page/{page_id}": {
+      "get": {
+        "tags": [
+          "Content"
+        ],
+        "summary": "Получить всю информацию о странице",
+        "description": "Возвращает ВСЮ информацию о странице:\n- Метаданные страницы (title, url, breadcrumbs, toc)\n- Все текстовые блоки (в порядке появления)\n- Все таблицы с данными (columns, rows, caption)\n\nИспользуйте этот эндпоинт, когда нужно получить полное содержимое конкретной страницы.",
+        "operationId": "get_page_full_api_page__page_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ID страницы из дерева",
+              "title": "Page Id"
+            },
+            "description": "ID страницы из дерева"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageFullResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tables/list": {
+      "get": {
+        "tags": [
+          "Tables"
+        ],
+        "summary": "Список всех таблиц с названиями",
+        "description": "Возвращает список всех таблиц в справочнике. Для каждой таблицы: table_id, caption, page_title, page_id. Используйте /api/table/{table_id} для получения полных данных таблицы.",
+        "operationId": "list_all_tables_api_tables_list_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Максимальное количество таблиц",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Максимальное количество таблиц"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Смещение для пагинации",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Смещение для пагинации"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TablesListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tables/search": {
+      "get": {
+        "tags": [
+          "Tables"
+        ],
+        "summary": "Поиск таблиц по названию",
+        "description": "Поиск таблиц по названию (регистронезависимый).\n\nВозвращает список таблиц, содержащих указанный текст в названии.\nДля получения полных данных таблицы используйте /api/table/{table_id}",
+        "operationId": "search_tables_api_tables_search_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Поисковый запрос по названию таблицы",
+              "title": "Query"
+            },
+            "description": "Поисковый запрос по названию таблицы"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Максимальное количество результатов",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Максимальное количество результатов"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TablesSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/table/{table_id}": {
+      "get": {
+        "tags": [
+          "Tables"
+        ],
+        "summary": "Получить данные таблицы",
+        "description": "Возвращает полные данные таблицы: caption, columns, rows, section_path, page_info. Используйте после поиска таблицы через /api/tables/search или /api/tables/list.",
+        "operationId": "get_table_api_table__table_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ID таблицы из списка таблиц",
+              "title": "Table Id"
+            },
+            "description": "ID таблицы из списка таблиц"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/page/{page_id}/tables": {
+      "get": {
+        "tags": [
+          "Tables"
+        ],
+        "summary": "Получить все таблицы страницы",
+        "description": "Возвращает все таблицы, которые находятся на конкретной странице.\n\nПолезно, когда вы знаете, на какой странице находится нужная информация,\nи хотите получить все таблицы с этой страницы.",
+        "operationId": "get_page_tables_api_page__page_id__tables_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ID страницы",
+              "title": "Page Id"
+            },
+            "description": "ID страницы"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageTablesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "PageFullResponse": {
+        "properties": {
+          "page": {
+            "type": "object",
+            "title": "Page"
+          },
+          "content": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Content"
+          },
+          "statistics": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Statistics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "content",
+          "statistics"
+        ],
+        "title": "PageFullResponse"
+      },
+      "PageTablesResponse": {
+        "properties": {
+          "page": {
+            "type": "object",
+            "title": "Page"
+          },
+          "tables": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tables"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "tables",
+          "count"
+        ],
+        "title": "PageTablesResponse"
+      },
+      "SearchTreeResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results",
+          "count"
+        ],
+        "title": "SearchTreeResponse"
+      },
+      "TableResponse": {
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "title": "Table Id"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "section_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Path"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table_id",
+          "caption",
+          "columns",
+          "rows",
+          "section_path",
+          "page"
+        ],
+        "title": "TableResponse"
+      },
+      "TablesListResponse": {
+        "properties": {
+          "tables": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tables"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tables",
+          "count",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TablesListResponse"
+      },
+      "TablesSearchResponse": {
+        "properties": {
+          "tables": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tables"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tables",
+          "count"
+        ],
+        "title": "TablesSearchResponse"
+      },
+      "TreeResponse": {
+        "properties": {
+          "tree": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tree"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tree",
+          "total_pages"
+        ],
+        "title": "TreeResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
