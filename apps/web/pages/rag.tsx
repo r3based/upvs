@@ -40,11 +40,11 @@ export default function RagPage() {
     <div className="container">
       <div className="header">
         <div className="nav">
-          <Link href="/">Страницы</Link>
+          <Link href="/">Навигация</Link>
           <Link href="/search">Поиск</Link>
-          <Link href="/rag">RAG</Link>
+          <Link href="/rag">Вопрос-ответ</Link>
         </div>
-        <h1>Вопрос-ответ</h1>
+        <h1>Вопрос-ответ (RAG)</h1>
         <input
           className="input"
           placeholder="Введите вопрос"

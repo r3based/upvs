@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Generator, List, TypedDict
@@ -66,8 +67,8 @@ def load_pages(pages_path: Path) -> Dict[str, PageRow]:
 
 
 def main() -> None:
-    data_dir = Path("data/raw")
-    derived_dir = Path("data/derived")
+    data_dir = Path(os.getenv("DATA_RAW_DIR", "data/raw"))
+    derived_dir = Path(os.getenv("DATA_DERIVED_DIR", "data/derived"))
     pages_path = data_dir / "pages.csv"
     chunks_path = data_dir / "text_chunks.jsonl"
     tables_path = data_dir / "tables.jsonl"

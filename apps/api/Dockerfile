@@ -7,9 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY apps/api/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir \
+    --default-timeout=600 --retries 10 \
+    --only-binary=:all: \
+    -r /app/requirements.txt
 
 COPY apps/api /app/apps/api
+COPY scripts /app/scripts
 
 ENV PYTHONPATH=/app
 

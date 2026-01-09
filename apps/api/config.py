@@ -13,6 +13,7 @@ class Settings:
     embeddings_model: str
     vllm_url: str
     vllm_model: str
+    vllm_api_key: str
 
 
 def get_settings() -> Settings:
@@ -28,4 +29,5 @@ def get_settings() -> Settings:
         ),
         vllm_url=os.getenv("VLLM_URL", "http://vllm:8000/v1"),
         vllm_model=os.getenv("VLLM_MODEL", "Qwen/Qwen2-1.5B-Instruct"),
+        vllm_api_key=os.getenv("VLLM_API_KEY", "EMPTY"),
     )

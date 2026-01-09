@@ -67,14 +67,35 @@ def get_provider(provider: str, model_name: str, http_url: str) -> EmbeddingProv
     return SentenceTransformersEmbeddingProvider(model_name)
 
 
-def load_page_urls(pages_path: Path) -> Dict[str, str]:
-    urls: Dict[str, str] = {}
+def load_page_info(pages_path: Path) -> Dict[str, Dict[str, str]]:
+    """Загружает информацию о страницах: url и title"""
+    page_info: Dict[str, Dict[str, str]] = {}
     with pages_path.open("r", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
             if row.get("page_id"):
-                urls[str(row["page_id"])] = str(row.get("url") or "")
-    return urls
+                page_id = str(row["page_id"])
+                page_info[page_id] = {
+                    "url": str(row.get("url") or ""),
+                    "title": str(row.get("title") or ""),
+                }
+    return page_info
+
+
+def load_table_captions(tables_path: Path) -> Dict[str, List[str]]:
+    """Загружает названия таблиц по page_id"""
+    table_captions: Dict[str, List[str]] = {}
+    if not tables_path.exists():
+        return table_captions
+    
+    for item in read_jsonl(tables_path):
+        page_id = str(item.get("page_id", ""))
+        caption = item.get("caption", "")
+        if page_id and caption:
+            if page_id not in table_captions:
+                table_captions[page_id] = []
+            table_captions[page_id].append(str(caption))
+    return table_captions
 
 
 def main() -> None:
@@ -103,7 +124,10 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     provider = get_provider(provider_name, model_name, http_url)
-    urls = load_page_urls(pages_path)
+    page_info = load_page_info(pages_path)
+    
+    tables_path = data_dir / "tables.jsonl"
+    table_captions = load_table_captions(tables_path)
 
     embeddings_list: List[np.ndarray] = []
     metas: List[ChunkMeta] = []
@@ -112,16 +136,41 @@ def main() -> None:
     batch_meta: List[ChunkMeta] = []
 
     for item in read_jsonl(chunks_path):
-        text = item.get("text", "")
-        batch_texts.append(text)
+        page_id = str(item["page_id"])
+        original_text = item.get("text", "")
+        
+        # Обогащаем текст контекстом страницы и таблиц
+        enriched_parts = []
+        
+        # Добавляем название страницы
+        page_data = page_info.get(page_id, {})
+        if page_data.get("title"):
+            enriched_parts.append(page_data["title"])
+        
+        # Добавляем названия таблиц с этой страницы
+        if page_id in table_captions:
+            enriched_parts.extend(table_captions[page_id])
+        
+        # Добавляем section_path
+        section_path = item.get("section_path") or []
+        if section_path:
+            enriched_parts.extend(section_path)
+        
+        # Добавляем оригинальный текст
+        enriched_parts.append(original_text)
+        
+        # Собираем обогащенный текст
+        enriched_text = ". ".join(enriched_parts)
+        
+        batch_texts.append(enriched_text)
         batch_meta.append(
             ChunkMeta(
                 chunk_id=str(item["chunk_id"]),
-                page_id=str(item["page_id"]),
-                url=urls.get(str(item["page_id"]), ""),
-                section_path=item.get("section_path") or [],
+                page_id=page_id,
+                url=page_data.get("url", ""),
+                section_path=section_path,
                 source_order=int(item.get("source_order", 0)),
-                text_preview=text[:240],
+                text_preview=original_text[:240],
             )
         )
         if len(batch_texts) >= args.batch_size:

@@ -9,6 +9,7 @@ from typing import Iterable, List, Tuple
 
 import psycopg2
 import psycopg2.extras
+from psycopg2.extras import Json
 
 
 CREATE_SQL = """
@@ -61,7 +62,8 @@ CREATE INDEX IF NOT EXISTS idx_edges_to_url ON edges(to_url);
 def read_jsonl(path: Path) -> Iterable[dict]:
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
-            if line.strip():
+            line = line.strip()
+            if line:
                 yield json.loads(line)
 
 
@@ -76,8 +78,8 @@ def batch_iter(rows: Iterable[Tuple[object, ...]], batch_size: int) -> Iterable[
         yield batch
 
 
-def load_pages(cur: psycopg2.extensions.cursor, pages_path: Path, batch_size: int) -> int:
-    rows = []
+def load_pages(cur: psycopg2.extensions.cursor, pages_path: Path, batch_size: int) -> None:
+    rows: List[Tuple[object, ...]] = []
     with pages_path.open("r", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
@@ -87,8 +89,8 @@ def load_pages(cur: psycopg2.extensions.cursor, pages_path: Path, batch_size: in
                     row.get("url"),
                     row.get("title"),
                     row.get("parent_url"),
-                    json.loads(row.get("breadcrumbs_json") or "null"),
-                    json.loads(row.get("toc_json") or "null"),
+                    Json(json.loads(row.get("breadcrumbs_json") or "null")),
+                    Json(json.loads(row.get("toc_json") or "null")),
                     row.get("fetched_at") or None,
                     int(row.get("http_status")) if row.get("http_status") else None,
                     row.get("content_hash"),
@@ -106,6 +108,7 @@ def load_pages(cur: psycopg2.extensions.cursor, pages_path: Path, batch_size: in
                     rows,
                 )
                 rows = []
+
     if rows:
         psycopg2.extras.execute_values(
             cur,
@@ -117,7 +120,6 @@ def load_pages(cur: psycopg2.extensions.cursor, pages_path: Path, batch_size: in
             """,
             rows,
         )
-    return 0
 
 
 def load_chunks(cur: psycopg2.extensions.cursor, chunks_path: Path, batch_size: int) -> None:
@@ -128,7 +130,7 @@ def load_chunks(cur: psycopg2.extensions.cursor, chunks_path: Path, batch_size: 
                 item.get("page_id"),
                 item.get("chunk_index"),
                 item.get("source_order"),
-                item.get("section_path"),
+                Json(item.get("section_path") or []),
                 item.get("text"),
             )
 
@@ -153,10 +155,10 @@ def load_tables(cur: psycopg2.extensions.cursor, tables_path: Path, batch_size: 
                 item.get("page_id"),
                 item.get("table_index"),
                 item.get("source_order"),
-                item.get("section_path"),
+                Json(item.get("section_path") or []),
                 item.get("caption"),
-                item.get("columns"),
-                item.get("rows"),
+                Json(item.get("columns") or []),
+                Json(item.get("rows") or []),
                 item.get("raw_html"),
             )
 
@@ -209,9 +211,6 @@ def main() -> None:
                 cur.execute(CREATE_SQL)
                 if args.truncate:
                     cur.execute("TRUNCATE edges, tables, text_chunks, pages")
-                cur.execute("SELECT 1")
-            conn.commit()
-
         with conn:
             with conn.cursor() as cur:
                 if pages_path.exists():

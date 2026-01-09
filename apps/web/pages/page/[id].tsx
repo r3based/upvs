@@ -32,10 +32,24 @@ interface PageBundle {
   blocks: Block[];
 }
 
+interface NavItem {
+  page_id: string;
+  url: string;
+  title: string;
+}
+
+interface PageNavigation {
+  current: NavItem;
+  parent: NavItem | null;
+  siblings: NavItem[];
+  children: NavItem[];
+}
+
 export default function PageView() {
   const router = useRouter();
   const { id } = router.query;
   const [bundle, setBundle] = useState<PageBundle | null>(null);
+  const [navigation, setNavigation] = useState<PageNavigation | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -43,20 +57,29 @@ export default function PageView() {
     const load = async () => {
       setLoading(true);
       try {
-        const url =
+        const [bundleRes, navRes] = await Promise.all([
+          fetch(
           mode === 'static'
             ? apiUrl(`/api/static/page/${id}`)
-            : apiUrl(`/pages/${id}/blocks`);
-        const res = await fetch(url);
-        const data = await res.json();
+              : apiUrl(`/pages/${id}/blocks`)
+          ),
+          fetch(apiUrl(`/navigation/page/${id}`)),
+        ]);
+
+        const bundleData = await bundleRes.json();
+        const navData = await navRes.json();
+
         if (mode === 'static') {
-          setBundle(data);
+          setBundle(bundleData);
         } else {
           setBundle({
-            page: data.page,
-            blocks: data.blocks
+            page: bundleData.page,
+            blocks: bundleData.blocks,
           });
         }
+        setNavigation(navData);
+      } catch (error) {
+        console.error('Error loading page:', error);
       } finally {
         setLoading(false);
       }
@@ -64,31 +87,98 @@ export default function PageView() {
     load();
   }, [id]);
 
+  // Группируем блоки по разделам
+  const groupedBlocks = bundle?.blocks.reduce((acc, block) => {
+    const sectionPath = block.section_path?.join(' / ') || 'Общее';
+    if (!acc[sectionPath]) {
+      acc[sectionPath] = [];
+    }
+    acc[sectionPath].push(block);
+    return acc;
+  }, {} as Record<string, Block[]>) || {};
+
   return (
-    <div className="container">
+    <div className="page-layout">
+      {navigation && (
+        <aside className="sidebar">
+          <div className="sidebar-content">
+            {navigation.parent && (
+              <div className="nav-section">
+                <div className="nav-section-title">Родительский раздел</div>
+                <Link href={`/page/${navigation.parent.page_id}`} className="nav-link">
+                  {navigation.parent.title}
+                </Link>
+              </div>
+            )}
+
+            {navigation.siblings.length > 0 && (
+              <div className="nav-section">
+                <div className="nav-section-title">Соседние разделы</div>
+                {navigation.siblings.map((sibling) => (
+                  <Link
+                    key={sibling.page_id}
+                    href={`/page/${sibling.page_id}`}
+                    className="nav-link"
+                  >
+                    {sibling.title}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {navigation.children.length > 0 && (
+              <div className="nav-section">
+                <div className="nav-section-title">Подразделы</div>
+                {navigation.children.map((child) => (
+                  <Link
+                    key={child.page_id}
+                    href={`/page/${child.page_id}`}
+                    className="nav-link"
+                  >
+                    {child.title}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
+
+      <main className="page-content">
       <div className="header">
         <div className="nav">
-          <Link href="/">Страницы</Link>
+            <Link href="/">Навигация</Link>
           <Link href="/search">Поиск</Link>
-          <Link href="/rag">RAG</Link>
+            <Link href="/rag">Вопрос-ответ</Link>
         </div>
         <h1>{bundle?.page?.title || 'Страница'}</h1>
-        {bundle?.page?.url ? <div className="block-meta">{bundle.page.url}</div> : null}
+          {bundle?.page?.url && (
+            <div className="block-meta">{bundle.page.url}</div>
+          )}
       </div>
-      {loading ? <p>Загрузка...</p> : null}
-      {bundle?.blocks?.map((block) => {
+
+        {loading ? (
+          <p>Загрузка...</p>
+        ) : (
+          <>
+            {Object.entries(groupedBlocks).map(([sectionPath, blocks]) => (
+              <div key={sectionPath} className="article-section">
+                {sectionPath !== 'Общее' && (
+                  <h2 className="section-title">{sectionPath}</h2>
+                )}
+                {blocks.map((block) => {
         if (block.kind === 'text') {
           return (
             <div className="card" key={block.chunk_id}>
-              <div className="block-meta">{block.section_path?.join(' / ')}</div>
-              <p>{block.text}</p>
+                        <p className="article-text">{block.text}</p>
             </div>
           );
         }
         return (
           <div className="card" key={block.table_id}>
-            <div className="block-meta">{block.section_path?.join(' / ')}</div>
-            <strong>{block.caption || 'Таблица'}</strong>
+                      <strong className="table-caption">
+                        {block.caption || 'Таблица'}
+                      </strong>
             <div className="table-wrap">
               <table className="table">
                 <thead>
@@ -112,6 +202,11 @@ export default function PageView() {
           </div>
         );
       })}
+              </div>
+            ))}
+          </>
+        )}
+      </main>
     </div>
   );
 }

@@ -1,0 +1,65 @@
+# Исключаем большие директории с данными
+data/
+*.csv
+*.jsonl
+*.faiss
+
+# Исключаем кэши и временные файлы
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+
+# Исключаем Git
+.git/
+.gitignore
+.gitattributes
+
+# Исключаем IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Исключаем документацию и README
+README.md
+*.md
+docs/
+
+# Исключаем Docker файлы (чтобы не копировать сам docker-compose.yml)
+docker/
+
+# Исключаем node_modules для web
+node_modules/
+.next/
+.npm
+.yarn/
+
+# Исключаем логи
+*.log
+logs/
+
+# Исключаем тестовые файлы
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Исключаем другие ненужные файлы
+.env
+.env.local
+*.db
+*.sqlite
+.DS_Store
+Thumbs.db
+
