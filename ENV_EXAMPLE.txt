@@ -1,0 +1,8 @@
+# Database Configuration
+DATABASE_URL=postgresql://upvs:upvs@postgres:5432/upvs
+
+# API Key для аутентификации
+# ВАЖНО: Замените это значение на свой собственный секретный ключ!
+# Этот ключ нужно будет указать в ChatGPT Actions как Bearer token
+API_KEY=your-secret-api-key-here
+
