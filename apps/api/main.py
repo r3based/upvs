@@ -53,14 +53,24 @@ app = FastAPI(
     ],
     contact={
         "name": "UPVS API Support"
-    }
+    },
+    # Отключаем Swagger UI и OpenAPI эндпоинты для безопасности
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None
 )
+
+# Получаем список разрешённых доменов из переменной окружения
+import os
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "https://chat.openai.com")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+    allow_credentials=True,
 )
 
 db = Database(settings)
@@ -80,7 +90,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
 @app.on_event("startup")
 def on_startup() -> None:
     db.init_schema()
-    logger.info("UPVS API запущен. API Key требуется для всех эндпоинтов (кроме /health и /docs)")
+    logger.info("UPVS API запущен. API Key требуется для всех эндпоинтов (кроме /health)")
+    logger.info(f"Разрешённые CORS origins: {allowed_origins}")
 
 
 @app.get("/health", tags=["System"])
@@ -89,15 +100,8 @@ def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/openapi.json", tags=["System"])
-def get_openapi_json():
-    """
-    Получить OpenAPI schema для ChatGPT Actions.
-    
-    Используйте этот эндпоинт для получения актуальной схемы API,
-    которую можно импортировать в ChatGPT Actions.
-    """
-    return JSONResponse(content=app.openapi())
+# OpenAPI эндпоинт удалён для безопасности
+# Используйте скрипт scripts/export_openapi.py для генерации openapi.json файла
 
 
 # ========== ЭНДПОИНТЫ ДЛЯ CHATGPT ==========

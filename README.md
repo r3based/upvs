@@ -326,6 +326,23 @@ print(f"Строк: {len(table_data['rows'])}")
 
 Этот проект создан для работы со справочником UPVS и интеграции с ChatGPT Actions.
 
+## 🔒 Безопасность
+
+Проект включает **enterprise-grade** защиту:
+- 🔥 Firewall (UFW)
+- 🛡️ IDS (Fail2Ban)
+- 🔐 SSH hardening
+- 🌐 Nginx rate limiting
+- 🔑 Bearer Token auth
+- 📊 Мониторинг
+
+**Полное руководство:** [SECURITY.md](./SECURITY.md)
+
+**Быстрая настройка:**
+```bash
+sudo bash scripts/security/setup_all.sh
+```
+
 ## 📄 Лицензия
 
 См. LICENSE файл для деталей.
@@ -336,3 +353,4 @@ print(f"Строк: {len(table_data['rows'])}")
 - [OpenAPI спецификация](https://swagger.io/specification/)
 - [ChatGPT Actions](https://platform.openai.com/docs/actions)
 - [PostgreSQL](https://www.postgresql.org/)
+- [OWASP Security](https://owasp.org/)

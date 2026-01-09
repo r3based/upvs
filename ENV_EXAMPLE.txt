@@ -1,8 +1,26 @@
-# Database Configuration
-DATABASE_URL=postgresql://upvs:upvs@postgres:5432/upvs
+# =============================================================================
+# UPVS API Configuration (для локальной разработки)
+# =============================================================================
 
 # API Key для аутентификации
-# ВАЖНО: Замените это значение на свой собственный секретный ключ!
-# Этот ключ нужно будет указать в ChatGPT Actions как Bearer token
+# ВАЖНО: Для продакшена используйте сильный ключ!
+# Генерация: bash scripts/generate_secrets.sh
 API_KEY=your-secret-api-key-here
+
+# PostgreSQL пароль
+# ВАЖНО: Для продакшена используйте сильный пароль!
+POSTGRES_PASSWORD=upvs
+
+# Database URL (использует POSTGRES_PASSWORD выше)
+DATABASE_URL=postgresql://upvs:upvs@postgres:5432/upvs
+
+# Разрешённые CORS origins (через запятую)
+ALLOWED_ORIGINS=https://chat.openai.com
+
+# =============================================================================
+# ДЛЯ ПРОДАКШЕНА: Используйте .env.production.example
+# Скопируйте его в .env и сгенерируйте секреты:
+#   cp .env.production.example .env
+#   bash scripts/generate_secrets.sh
+# =============================================================================
 

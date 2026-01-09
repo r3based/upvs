@@ -5,10 +5,11 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: upvs
-      POSTGRES_PASSWORD: upvs
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-upvs}
       POSTGRES_DB: upvs
-    ports:
-      - "5432:5432"
+    # Порты НЕ публикуются - доступ только внутри Docker network
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,13 +17,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - upvs_internal
 
   init:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://upvs:upvs@postgres:5432/upvs}
+      DATABASE_URL: postgresql://upvs:${POSTGRES_PASSWORD:-upvs}@postgres:5432/upvs
       API_KEY: ${API_KEY:-your-secret-api-key-here}
     volumes:
       - ./data:/app/data
@@ -32,18 +35,22 @@ services:
       postgres:
         condition: service_healthy
     restart: "no"
+    networks:
+      - upvs_internal
 
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://upvs:upvs@postgres:5432/upvs}
+      DATABASE_URL: postgresql://upvs:${POSTGRES_PASSWORD:-upvs}@postgres:5432/upvs
       API_KEY: ${API_KEY:-your-secret-api-key-here}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://chat.openai.com}
     volumes:
       - ./data:/app/data
+    # Порт публикуется ТОЛЬКО на localhost - доступ через Nginx
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,7 +62,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - upvs_internal
 
 volumes:
   postgres_data:
+
+networks:
+  upvs_internal:
+    driver: bridge
+    internal: false  # false для доступа к интернету (нужен для init)
 
